@@ -1,38 +1,23 @@
 import { Request, Response } from "express";
-import { SurveyType } from "../types";
-import { SurveySchema } from "../zodParser";
+import { SurveyType } from "../lib/types";
+import { SurveySchema } from "../lib/zodParser";
 import { PrismaClient } from "../generated/prisma";
+import { getSurveyService, submitResponseService } from "../service/survey.service";
 
 const prisma = new PrismaClient();
 async function surveyGetHandler(req: Request<{surveyId:string}, {}, {}>, res: Response): Promise<any>{
     const surveyId = parseInt(req.params.surveyId);
-    const q = await prisma.surveyLinks.findUnique({
-        where:{
-            id: surveyId,
-            status:"ACTIVE"
-        }
-    });
-    if (!q) return res.status(404).json("cannot find it");
-    const formData = await prisma.events.findUnique({
-        where:{
-            id: q?.eventId!
-        },
-    });
-    return res.status(200).json(formData);
+    const result = await getSurveyService(surveyId);
+    if (!result) res.status(404);
+    return res.status(200).json(result);
 }
 
-async function surveyFormHandler(req: Request<{surveyLinkId:string}, {}, SurveyType>, res: Response): Promise<any>{
+async function surveyFormHandler(req: Request<{surveyId:string}, {}, SurveyType>, res: Response): Promise<any>{
     const surveyData = req.body;    
-    const surveyId = parseInt(req.params.surveyLinkId);
-    console.log(surveyData);
+    const surveyId = parseInt(req.params.surveyId);
     SurveySchema.parse({...surveyData});
 
-    await prisma.surveyResponses.create({
-        data:{
-            ...surveyData,
-            linkId: surveyId
-        }
-    });
+    await submitResponseService(surveyId, surveyData);
 
     return res.status(201).json({message: "response submitted!"});
 }

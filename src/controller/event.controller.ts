@@ -1,24 +1,16 @@
 import { Request, Response } from "express";
-import { EventType, UpdateEventType } from "../types";
-import { EventSchema } from "../zodParser";
-import { PrismaClient } from "../generated/prisma";
-
-const prisma = new PrismaClient();
-const URL = "http://localhost:5173/survey/";
+import { EventType, UpdateEventType } from "../lib/types";
+import { EventSchema } from "../lib/zodParser";
+import { createEventService, deleteEventService, getEventByIdService, getEventsService } from "../service/event.service";
 
 async function getEventsHandler(req: Request, res: Response): Promise<any> {
-  const data = await prisma.events.findMany({});
+  const data = await getEventsService();
   return res.status(200).json({data});
 }
 async function getEventByIdHandler(req:Request<{eventId: string}>, res:Response):Promise<any>{
   const eventId = parseInt(req.params.eventId);
-  const result = await prisma.events.findFirst({
-    where:{
-      id:eventId
-    }
-  });
-  
-  return res.status(200).json({event: result})
+  const result = await getEventByIdService(eventId);
+  return res.status(200).json({...result})
 }
 async function createEventHandler(
   req: Request<{}, {}, EventType>,
@@ -26,39 +18,7 @@ async function createEventHandler(
 ): Promise<any> {
   const newEvent = req.body;
   EventSchema.parse({...newEvent});
-  const result = await prisma.events.create({
-    data: {
-      title: newEvent.title,
-      location: newEvent.location,
-      eventDate: new Date(newEvent.eventDate),
-      status: "ACTIVE",
-    },
-  });
-  const link = await prisma.surveyLinks.create({
-    data: {
-      status: "ACTIVE",
-      eventId: result.id,
-    },
-  });
-  const generated = URL + link.id;
-  await Promise.all([
-    prisma.events.update({
-      where: {
-        id: result.id,
-      },
-      data: {
-        generatedLink: generated,
-      },
-    }),
-    prisma.surveyLinks.update({
-      where: {
-        id: link.id,
-      },
-      data: {
-        generatedLink: generated,
-      },
-    }),
-  ]);
+  await createEventService(newEvent)
   return res.status(201).json("Event created!");
 }
 async function updateEventHandler(req: Request<{}, {}, UpdateEventType>, res: Response):Promise<any> {
@@ -66,16 +26,7 @@ async function updateEventHandler(req: Request<{}, {}, UpdateEventType>, res: Re
 }
 async function deleteEventHandler(req: Request<{eventId:number}>, res:Response):Promise<any>{
   const eventId = req.params.eventId;
-  await prisma.events.delete({
-    where:{
-      id:eventId
-    }
-  });
-  await prisma.surveyLinks.delete({
-    where:{
-      eventId:eventId
-    }
-  });
+  await deleteEventService(eventId);
   return res.status(301).json({message:"event deleted"});
 }
 export { getEventsHandler, getEventByIdHandler, createEventHandler,updateEventHandler, deleteEventHandler };
